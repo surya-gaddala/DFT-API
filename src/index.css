@@ -1,0 +1,43 @@
+:root {
+  font-family: 'Roboto', system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  color-scheme: light dark;
+  color: #000000; /* Changed to black */
+  background-color: #0a0a0a; /* Changed to white for contrast */
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+#root {
+  width: 100%;
+  min-height: 100vh;
+}
+
+pre {
+  font-family: 'Roboto Mono', monospace;
+  font-size: 0.875rem;
+  background-color: #ffffff; /* Added for code block visibility */
+  padding: 1rem; /* Added spacing for code blocks */
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color: #ffffff; /* White text for dark mode */
+    background-color: #ffffff; /* Dark background */
+  }
+  
+  pre {
+    background-color: #ffffff; /* Darker background for code blocks */
+  }
+}
