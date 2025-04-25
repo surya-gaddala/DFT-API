@@ -1,13 +1,13 @@
 {
-  "name": "api-tester",
+  "name": "api-ui",
   "private": true,
   "version": "0.0.0",
-  "homepage": "https://surya-gaddala.github.io/API-UI",
+  "homepage": ".",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "lint": "eslint .",
+    "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
     "predeploy": "npm run build",
     "deploy": "gh-pages -d dist"

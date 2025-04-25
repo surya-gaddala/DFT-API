@@ -12,7 +12,7 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 
 export default defineConfig({
-  base: '/API-UI/', // 👈 IMPORTANT: matches the repo name exactly
+  base: './',
   plugins: [react()],
   resolve: {
     alias: {
