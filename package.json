@@ -2,7 +2,7 @@
   "name": "api-ui",
   "private": true,
   "version": "0.0.0",
-  "homepage": ".",
+  "homepage": "https://surya-gaddala.github.io/DFT-API/",
   "type": "module",
   "scripts": {
     "dev": "vite",
