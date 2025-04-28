@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Box,
   Paper,
@@ -14,8 +14,6 @@ import {
   Menu,
   MenuItem,
   ListItemIcon,
-  Snackbar,
-  Alert,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -29,14 +27,13 @@ import {
   Schedule as TimeIcon,
   Check as SuccessIcon,
   Error as ErrorIcon,
-  Info as InfoIcon
+  Info as InfoIcon,
+  Send as SendIcon
 } from '@mui/icons-material';
-import { fetchHistory, clearHistory } from '../../utils/dataManager';
 
-const HistoryViewer = () => {
-  const [history, setHistory] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+const HISTORY_STORAGE_KEY = 'requestHistory';
+
+const HistoryViewer = ({ onSelectRequest, history }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterAnchor, setFilterAnchor] = useState(null);
   const [selectedStatus, setSelectedStatus] = useState('all');
@@ -44,33 +41,10 @@ const HistoryViewer = () => {
   const [selectedItem, setSelectedItem] = useState(null);
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
 
-  // Fetch history on component mount
-  useEffect(() => {
-    loadHistory();
-  }, []);
-
-  const loadHistory = async () => {
-    setLoading(true);
-    try {
-      const data = await fetchHistory();
-      setHistory(data);
-      setError(null);
-    } catch (err) {
-      setError('Failed to load history');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleClearHistory = async () => {
-    try {
-      await clearHistory();
-      setHistory([]);
-      setError(null);
-      setClearDialogOpen(false);
-    } catch (err) {
-      setError('Failed to clear history');
-    }
+  const handleClearHistory = () => {
+    localStorage.removeItem(HISTORY_STORAGE_KEY);
+    window.location.reload(); // Reload to clear the history state in App.jsx
+    setClearDialogOpen(false);
   };
 
   const getStatusIcon = (status) => {
@@ -162,11 +136,7 @@ const HistoryViewer = () => {
 
       {/* History List */}
       <List sx={{ flexGrow: 1, overflow: 'auto', py: 0 }}>
-        {loading ? (
-          <ListItem>
-            <ListItemText primary="Loading history..." />
-          </ListItem>
-        ) : filteredHistory.length === 0 ? (
+        {filteredHistory.length === 0 ? (
           <ListItem>
             <ListItemText primary="No requests found" />
           </ListItem>
@@ -190,44 +160,50 @@ const HistoryViewer = () => {
                 </ListItemIcon>
                 <ListItemText
                   primary={
-                    <Typography component="span" variant="body1" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Box display="flex" alignItems="center">
                       <Chip
                         label={item.method}
                         size="small"
-                        color={getMethodColor(item.method)}
-                      />
-                      <Typography
-                        component="span"
-                        sx={{
-                          maxWidth: '500px',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap'
+                        sx={{ 
+                          mr: 1, 
+                          width: 60, 
+                          fontWeight: 'bold',
+                          backgroundColor: 
+                            item.method === 'GET' ? '#e8f5e9' :
+                            item.method === 'POST' ? '#e3f2fd' :
+                            item.method === 'PUT' ? '#fff8e1' :
+                            item.method === 'DELETE' ? '#ffebee' : '#f3e5f5',
+                          color: 'black'
                         }}
-                      >
-                        {item.url}
-                      </Typography>
-                    </Typography>
+                      />
+                      <Typography noWrap>{item.url}</Typography>
+                    </Box>
                   }
                   secondary={
-                    <Typography component="span" variant="caption" color="text.secondary">
-                      {new Date(item.timestamp).toLocaleString()}
-                      {item.duration && ` • ${item.duration}ms`}
-                      {item.status === 'error' && ` • ${item.error}`}
-                    </Typography>
+                    <Box display="flex" alignItems="center" justifyContent="space-between">
+                      <Typography variant="caption" color="text.secondary">
+                        {new Date(item.timestamp).toLocaleString()}
+                      </Typography>
+                      <Chip
+                        size="small"
+                        label={item.status || 'unknown'}
+                        color={item.status === 'success' ? 'success' : 'error'}
+                        sx={{ ml: 1 }}
+                      />
+                    </Box>
                   }
                 />
                 <IconButton
                   size="small"
                   onClick={(e) => {
                     e.stopPropagation();
-                    navigator.clipboard.writeText(item.url);
+                    onSelectRequest(item);
                   }}
                 >
-                  <CopyIcon fontSize="small" />
+                  <SendIcon fontSize="small" />
                 </IconButton>
               </ListItem>
-              <Divider />
+              <Divider component="li" />
             </React.Fragment>
           ))
         )}
@@ -269,17 +245,6 @@ const HistoryViewer = () => {
           </ListItemIcon>
           Error
         </MenuItem>
-        <MenuItem
-          onClick={() => {
-            setSelectedStatus('pending');
-            setFilterAnchor(null);
-          }}
-        >
-          <ListItemIcon>
-            <TimeIcon color="warning" fontSize="small" />
-          </ListItemIcon>
-          Pending
-        </MenuItem>
       </Menu>
 
       {/* Clear History Dialog */}
@@ -320,8 +285,15 @@ const HistoryViewer = () => {
                 <Typography variant="subtitle2" color="text.secondary">Method</Typography>
                 <Chip
                   label={selectedItem.method}
-                  color={getMethodColor(selectedItem.method)}
                   size="small"
+                  sx={{ 
+                    backgroundColor: 
+                      selectedItem.method === 'GET' ? '#e8f5e9' :
+                      selectedItem.method === 'POST' ? '#e3f2fd' :
+                      selectedItem.method === 'PUT' ? '#fff8e1' :
+                      selectedItem.method === 'DELETE' ? '#ffebee' : '#f3e5f5',
+                    color: 'black'
+                  }}
                 />
               </Box>
               <Box>
@@ -358,34 +330,22 @@ const HistoryViewer = () => {
                   </Paper>
                 </Box>
               )}
-              {selectedItem.error && (
-                <Box>
-                  <Typography variant="subtitle2" color="text.secondary">Error</Typography>
-                  <Paper variant="outlined" sx={{ p: 1, bgcolor: 'error.light' }}>
-                    <Typography color="error.contrastText">
-                      {selectedItem.error}
-                    </Typography>
-                  </Paper>
-                </Box>
-              )}
             </Box>
           )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setDetailsDialogOpen(false)}>Close</Button>
+          <Button 
+            variant="contained" 
+            onClick={() => {
+              onSelectRequest(selectedItem);
+              setDetailsDialogOpen(false);
+            }}
+          >
+            Resend Request
+          </Button>
         </DialogActions>
       </Dialog>
-
-      {/* Error Snackbar */}
-      <Snackbar
-        open={!!error}
-        autoHideDuration={6000}
-        onClose={() => setError(null)}
-      >
-        <Alert severity="error" onClose={() => setError(null)}>
-          {error}
-        </Alert>
-      </Snackbar>
     </Box>
   );
 };

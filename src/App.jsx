@@ -14,17 +14,38 @@ const DEFAULT_MIDDLE_WIDTH = 320;
 const MIN_MIDDLE_WIDTH = 160;
 const MAX_MIDDLE_WIDTH = 500;
 
+// Constants
+const HISTORY_STORAGE_KEY = 'requestHistory';
+const MAX_HISTORY_ITEMS = 50;
+
 function App() {
   const [response, setResponse] = useState(null);
   const [currentRequest, setCurrentRequest] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [history, setHistory] = useState([]);
+  const [history, setHistory] = useState(() => {
+    try {
+      const savedHistory = localStorage.getItem(HISTORY_STORAGE_KEY);
+      return savedHistory ? JSON.parse(savedHistory) : [];
+    } catch (error) {
+      console.error('Error loading history:', error);
+      return [];
+    }
+  });
   const [selectedView, setSelectedView] = useState('collections');
   const [isMiddlePanelOpen, setIsMiddlePanelOpen] = useState(true);
   const [middleWidth, setMiddleWidth] = useState(DEFAULT_MIDDLE_WIDTH);
   const [isResizing, setIsResizing] = useState(false);
   
   const middleResizeRef = useRef(null);
+
+  // Save history to localStorage whenever it changes
+  useEffect(() => {
+    try {
+      localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(history));
+    } catch (error) {
+      console.error('Error saving history:', error);
+    }
+  }, [history]);
 
   const handleResponse = (responseData, requestConfig) => {
     setResponse(responseData);
@@ -36,11 +57,25 @@ function App() {
         body: requestConfig.data || '',
         timestamp: new Date().toISOString(),
         id: Date.now(),
-        response: responseData
+        response: responseData,
+        status: responseData.status >= 200 && responseData.status < 300 ? 'success' : 'error'
       };
       setCurrentRequest(newRequest);
-      setHistory(prev => [newRequest, ...prev].slice(0, 50));
+      setHistory(prev => {
+        const newHistory = [newRequest, ...prev].slice(0, MAX_HISTORY_ITEMS);
+        try {
+          localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(newHistory));
+        } catch (error) {
+          console.error('Error saving history:', error);
+        }
+        return newHistory;
+      });
     }
+  };
+
+  const clearHistory = () => {
+    setHistory([]);
+    localStorage.removeItem(HISTORY_STORAGE_KEY);
   };
 
   const refreshCollections = () => {
@@ -51,20 +86,32 @@ function App() {
   };
 
   const handleSelectRequest = (request) => {
-    setCurrentRequest(request);
+    // Set the current request for the form
+    setCurrentRequest({
+      method: request.method,
+      url: request.url,
+      headers: request.headers,
+      body: request.body,
+      name: request.name || '',
+      collectionName: request.collectionName || ''
+    });
+    
+    // If there's a response, set it
     if (request.response) {
       setResponse(request.response);
     }
-    // Ensure middle panel stays open when loading a request
-    setIsMiddlePanelOpen(true);
+    
+    // Switch to the main view to show the request form
+    setSelectedView('collections');
+    setIsMiddlePanelOpen(false);
   };
 
   const handleViewChange = (view) => {
-    if (selectedView === view) {
-      // Toggle the middle panel when clicking the same menu item
+    if (selectedView === view && view !== 'history') {
+      // Toggle the middle panel only for non-history views
       setIsMiddlePanelOpen(!isMiddlePanelOpen);
     } else {
-      // Open the middle panel and change the view when clicking a different menu item
+      // Always open the panel and change the view
       setSelectedView(view);
       setIsMiddlePanelOpen(true);
     }
@@ -186,6 +233,7 @@ function App() {
                 selectedView={selectedView}
                 onSelectRequest={handleSelectRequest}
                 refreshKey={refreshKey}
+                history={history}
               />
             </Box>
             {isMiddlePanelOpen && (

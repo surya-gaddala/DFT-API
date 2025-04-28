@@ -41,7 +41,7 @@ const DashboardViewer = () => (
 );
 */
 
-const ViewManager = ({ selectedView, onSelectRequest, refreshKey }) => {
+const ViewManager = ({ selectedView, onSelectRequest, refreshKey, history }) => {
 
   const renderView = () => {
     switch (selectedView) {
@@ -63,7 +63,7 @@ const ViewManager = ({ selectedView, onSelectRequest, refreshKey }) => {
         // return <DashboardViewer />;
         return <Typography sx={{ p: 2 }}>Dashboard View Coming Soon</Typography>; // Placeholder
       case 'history':
-        return <HistoryViewer onSelectRequest={onSelectRequest} />;
+        return <HistoryViewer onSelectRequest={onSelectRequest} history={history} />;
       default:
         return (
           <Box sx={{ p: 2, display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>

@@ -172,6 +172,9 @@ const RequestForm = ({ onResponse, initialRequest, onSaveSuccess }) => {
   const [createNewOpen, setCreateNewOpen] = useState(false);
   const [newCollectionName, setNewCollectionName] = useState('');
   const [anchorEl, setAnchorEl] = useState(null);
+  const [currentEnv, setCurrentEnv] = useState(null);
+  const [envVars, setEnvVars] = useState({});
+  const [envFunctions, setEnvFunctions] = useState({});
 
   // Update form when initialRequest changes
   useEffect(() => {
@@ -203,6 +206,23 @@ const RequestForm = ({ onResponse, initialRequest, onSaveSuccess }) => {
     setCollections(data.collections);
   }, [onSaveSuccess]); // Add onSaveSuccess to dependencies to ensure we update when parent triggers refresh
 
+  useEffect(() => {
+    // Load current environment and its variables/functions
+    const savedCurrentEnv = localStorage.getItem('currentEnvironment');
+    const savedEnvs = localStorage.getItem('environments');
+    
+    if (savedCurrentEnv && savedEnvs) {
+      const environments = JSON.parse(savedEnvs);
+      const currentEnvironment = environments.find(env => env.name === savedCurrentEnv);
+      
+      if (currentEnvironment) {
+        setCurrentEnv(currentEnvironment.name);
+        setEnvVars(currentEnvironment.variables || {});
+        setEnvFunctions(currentEnvironment.functions || {});
+      }
+    }
+  }, []);
+
   const handleTabChange = (event, newValue) => {
     setActiveTab(newValue);
   };
@@ -212,6 +232,38 @@ const RequestForm = ({ onResponse, initialRequest, onSaveSuccess }) => {
     if (HTTP_METHODS[newMethod].requiresBody && !body) {
       setBody(getMethodBodyTemplate(newMethod));
       setActiveTab(2); // Switch to body tab
+    }
+  };
+
+  const replaceEnvVars = (text) => {
+    if (!text || !currentEnv) return text;
+    
+    return text.replace(/\{\{([^}]+)\}\}/g, (match, key) => {
+      return envVars[key.trim()] || match;
+    });
+  };
+
+  const executeFunction = (funcName, ...args) => {
+    if (!envFunctions[funcName]) {
+      console.warn(`Function ${funcName} not found in environment`);
+      return null;
+    }
+
+    try {
+      // Create a safe function execution environment
+      const functionBody = envFunctions[funcName];
+      const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
+      const func = new AsyncFunction('args', `
+        ${functionBody}
+        const funcName = '${funcName}';
+        const func = eval(funcName);
+        return func(...args);
+      `);
+      
+      return func(args);
+    } catch (error) {
+      console.error(`Error executing function ${funcName}:`, error);
+      return null;
     }
   };
 
@@ -231,25 +283,54 @@ const RequestForm = ({ onResponse, initialRequest, onSaveSuccess }) => {
             statusText: 'Invalid JSON body',
             data: { error: 'Please check your JSON syntax and try again' },
             time: new Date().toISOString()
+          }, {
+            method,
+            url,
+            headers,
+            data: body
           });
           setLoading(false);
           return;
         }
       }
 
+      // Execute pre-request functions if available
+      if (currentEnv && envFunctions.generateToken) {
+        try {
+          const token = await executeFunction('generateToken', envVars.username, envVars.password);
+          if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+          }
+        } catch (error) {
+          console.warn('Error generating token:', error);
+        }
+      }
+
+      // Replace environment variables in URL and headers
+      const processedUrl = replaceEnvVars(url);
+      const processedHeaders = Object.entries(headers).reduce((acc, [key, value]) => {
+        acc[key] = replaceEnvVars(value);
+        return acc;
+      }, {});
+
+      // Process request body with environment variables
+      if (typeof requestBody === 'string') {
+        requestBody = replaceEnvVars(requestBody);
+      } else if (requestBody && typeof requestBody === 'object') {
+        requestBody = JSON.parse(replaceEnvVars(JSON.stringify(requestBody)));
+      }
+
       const config = {
         method: method,
-        url: url,
+        url: processedUrl,
         headers: {
           'Content-Type': 'application/json',
-          ...headers,
-          // Add common headers that might help with CORS
+          ...processedHeaders,
           'Accept': 'application/json, text/plain, */*',
           'Access-Control-Allow-Origin': '*'
         },
         data: HTTP_METHODS[method].requiresBody ? requestBody : undefined,
-        // Add timeout and validation
-        timeout: 30000,
+        timeout: parseInt(envVars.timeout) || 30000,
         validateStatus: status => status >= 200 && status < 600
       };
 
@@ -258,14 +339,59 @@ const RequestForm = ({ onResponse, initialRequest, onSaveSuccess }) => {
       const response = await api(config);
       
       console.log('Received response:', response);
+
+      // Execute response validation if available
+      let processedResponse = response;
+      if (currentEnv && envFunctions.validateResponse) {
+        try {
+          await executeFunction('validateResponse', response);
+        } catch (error) {
+          console.warn('Response validation failed:', error);
+          throw error;
+        }
+      }
+
+      // Format dates in response if the function is available
+      if (currentEnv && envFunctions.formatDate) {
+        const formatDatesInObject = (obj) => {
+          if (!obj) return obj;
+          if (typeof obj !== 'object') return obj;
+
+          const isISODate = (str) => {
+            if (typeof str !== 'string') return false;
+            return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(str);
+          };
+
+          return Object.entries(obj).reduce((acc, [key, value]) => {
+            if (Array.isArray(value)) {
+              acc[key] = value.map(item => formatDatesInObject(item));
+            } else if (typeof value === 'object' && value !== null) {
+              acc[key] = formatDatesInObject(value);
+            } else if (isISODate(value)) {
+              try {
+                acc[key] = executeFunction('formatDate', value);
+              } catch (error) {
+                acc[key] = value;
+              }
+            } else {
+              acc[key] = value;
+            }
+            return acc;
+          }, {});
+        };
+
+        processedResponse.data = formatDatesInObject(response.data);
+      }
       
       onResponse({
-        status: response.status,
-        statusText: response.statusText,
-        headers: response.headers,
-        data: response.data,
-        time: new Date().toISOString()
-      });
+        status: processedResponse.status,
+        statusText: processedResponse.statusText,
+        headers: processedResponse.headers,
+        data: processedResponse.data,
+        time: new Date().toISOString(),
+        requestSize: JSON.stringify(config).length,
+        responseSize: JSON.stringify(processedResponse.data).length
+      }, config);
     } catch (error) {
       console.error('Request error:', error);
       onResponse({ 
@@ -276,7 +402,19 @@ const RequestForm = ({ onResponse, initialRequest, onSaveSuccess }) => {
           error: error.message,
           details: 'This might be due to CORS restrictions. Try using a different URL or checking if the API allows cross-origin requests.'
         },
-        time: new Date().toISOString()
+        time: new Date().toISOString(),
+        requestSize: JSON.stringify({
+          method,
+          url,
+          headers,
+          data: HTTP_METHODS[method].requiresBody ? body : undefined
+        }).length,
+        responseSize: 0
+      }, {
+        method,
+        url,
+        headers,
+        data: HTTP_METHODS[method].requiresBody ? body : undefined
       });
     } finally {
       setLoading(false);
@@ -358,11 +496,58 @@ const RequestForm = ({ onResponse, initialRequest, onSaveSuccess }) => {
 
   return (
     <Box sx={{ 
-      width: '100%',
-      height: '100%',
       display: 'flex',
-      flexDirection: 'column'
+      flexDirection: 'column',
+      height: '100%',
+      minHeight: '200px',
+      maxHeight: 'calc(100vh - 300px)',
+      position: 'relative',
+      border: '1px solid rgba(0, 0, 0, 0.12)',
+      borderRadius: 1,
+      resize: 'vertical',
+      overflow: 'auto',
+      '&::after': {
+        content: '""',
+        position: 'absolute',
+        bottom: 0,
+        right: 0,
+        width: '15px',
+        height: '15px',
+        cursor: 'nwse-resize',
+        background: `
+          linear-gradient(
+            135deg,
+            transparent 0%,
+            transparent 50%,
+            rgba(0,0,0,0.1) 50%,
+            rgba(0,0,0,0.1) 100%
+          )
+        `
+      },
+      '&:hover::after': {
+        background: `
+          linear-gradient(
+            135deg,
+            transparent 0%,
+            transparent 50%,
+            rgba(0,0,0,0.2) 50%,
+            rgba(0,0,0,0.2) 100%
+          )
+        `
+      }
     }}>
+      {/* Environment Indicator */}
+      {currentEnv && (
+        <Paper elevation={0} sx={{ p: 1, mb: 1, bgcolor: 'background.default' }}>
+          <Typography variant="body2" color="text.secondary">
+            Using environment: <strong>{currentEnv}</strong>
+            {Object.keys(envFunctions).length > 0 && (
+              <span> ({Object.keys(envFunctions).length} functions available)</span>
+            )}
+          </Typography>
+        </Paper>
+      )}
+
       {/* Save Request Section */}
       <Paper
         elevation={0}

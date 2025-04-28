@@ -85,14 +85,14 @@ const Sidebar = ({ refreshKey, onSelectRequest, history, selectedView, onViewCha
   }, [activeItem]);
 
   const menuItems = [
-    { id: 'collections', icon: <CollectionsIcon />, label: 'Collections' },
-    { id: 'environments', icon: <EnvironmentsIcon />, label: 'Environments' },
-    { id: 'test', icon: <TestIcon />, label: 'Test' },
-    { id: 'groups', icon: <GroupsIcon />, label: 'Groups' },
-    { id: 'schedule', icon: <ScheduleIcon />, label: 'Schedule' },
-    { id: 'flows', icon: <FlowsIcon />, label: 'Flows' },
-    { id: 'dashboard', icon: <DashboardIcon />, label: 'Dashboard' },
-    { id: 'history', icon: <HistoryIcon />, label: 'History', badge: true }
+    { id: 'collections', icon: CollectionsIcon, label: 'Collections' },
+    { id: 'environments', icon: EnvironmentsIcon, label: 'Environments' },
+    { id: 'test', icon: TestIcon, label: 'Test' },
+    { id: 'groups', icon: GroupsIcon, label: 'Groups' },
+    { id: 'schedule', icon: ScheduleIcon, label: 'Schedule' },
+    { id: 'flows', icon: FlowsIcon, label: 'Flows' },
+    { id: 'dashboard', icon: DashboardIcon, label: 'Dashboard' },
+    { id: 'history', icon: HistoryIcon, label: 'History' }
   ];
 
   return (
@@ -109,66 +109,42 @@ const Sidebar = ({ refreshKey, onSelectRequest, history, selectedView, onViewCha
       }}
     >
       <List sx={{ py: 1, flexShrink: 0, width: '100%' }} disablePadding>
-        {menuItems.map((item) => (
-          <ListItemButton
-            key={item.id}
-            selected={selectedView === item.id}
-            onClick={() => handleItemClick(item.id)}
-            sx={{
-              mb: 0.5,
-              position: 'relative',
-              py: 0.8,
-              width: '100%',
-              '&.Mui-selected': {
-                backgroundColor: 'transparent',
-                color: 'primary.main',
-                '&:hover': {
-                  backgroundColor: 'action.hover',
-                },
-                '&::before': {
-                  content: '""',
-                  position: 'absolute',
-                  left: 0,
-                  top: 0,
-                  bottom: 0,
-                  width: 3,
-                  backgroundColor: 'primary.main',
-                  borderRadius: '0 4px 4px 0'
+        {menuItems.map((item) => {
+          const Icon = item.icon;
+          return (
+            <ListItemButton
+              key={item.id}
+              selected={selectedView === item.id}
+              onClick={() => handleItemClick(item.id)}
+              sx={{
+                borderRadius: 1,
+                mb: 0.5,
+                minHeight: 40,
+                '&.Mui-selected': {
+                  bgcolor: 'primary.main',
+                  color: 'white',
+                  '&:hover': {
+                    bgcolor: 'primary.dark',
+                  },
+                  '& .MuiListItemIcon-root': {
+                    color: 'white',
+                  }
                 }
-              },
-              '&:hover': {
-                backgroundColor: 'action.hover'
-              }
-            }}
-          >
-            <ListItemIcon 
-              sx={{ 
-                minWidth: 32,
-                color: selectedView === item.id ? 'primary.main' : 'inherit'
               }}
             >
-              {item.badge && history ? (
-                <Badge badgeContent={history.length} color="primary">
-                  {item.icon}
-                </Badge>
-              ) : (
-                item.icon
-              )}
-            </ListItemIcon>
-            <ListItemText 
-              primary={item.label} 
-              primaryTypographyProps={{ 
-                variant: 'body2',
-                sx: {
-                  fontWeight: selectedView === item.id ? 600 : 400,
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis'
-                }
-              }}
-            />
-          </ListItemButton>
-        ))}
+              <ListItemIcon sx={{ minWidth: 36 }}>
+                <Icon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText 
+                primary={item.label}
+                primaryTypographyProps={{
+                  fontSize: '0.875rem',
+                  fontWeight: selectedView === item.id ? 'bold' : 'normal'
+                }}
+              />
+            </ListItemButton>
+          );
+        })}
       </List>
       <Divider sx={{ my: 1, borderColor: 'black' }} />
 

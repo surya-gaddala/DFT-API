@@ -1,398 +1,208 @@
 import React, { useState, useEffect } from 'react';
 import {
   Box,
-  Paper,
   Typography,
-  List,
-  ListItem,
-  ListItemText,
-  IconButton,
+  Paper,
   Button,
-  Divider,
-  TextField,
-  Switch,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Snackbar,
-  Alert
+  TextField,
+  List,
+  ListItem,
+  ListItemText,
+  IconButton,
+  Divider,
+  Tooltip
 } from '@mui/material';
 import {
+  Construction as ConstructionIcon,
   Add as AddIcon,
   Delete as DeleteIcon,
-  Edit as EditIcon,
-  ContentCopy as CopyIcon
+  Check as CheckIcon
 } from '@mui/icons-material';
-import {
-  fetchEnvironments,
-  createEnvironment,
-  updateEnvironment,
-  deleteEnvironment
-} from '../../utils/dataManager';
 
 const EnvironmentsViewer = () => {
   const [environments, setEnvironments] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [selectedEnv, setSelectedEnv] = useState(null);
-  const [newVariable, setNewVariable] = useState({ key: '', value: '' });
+  const [currentEnv, setCurrentEnv] = useState('');
+  const [openDialog, setOpenDialog] = useState(false);
   const [newEnvName, setNewEnvName] = useState('');
+  const [baseUrl, setBaseUrl] = useState('');
 
-  // Fetch environments on component mount
   useEffect(() => {
-    loadEnvironments();
+    // Load environments from localStorage
+    const savedEnvs = localStorage.getItem('environments');
+    if (savedEnvs) {
+      setEnvironments(JSON.parse(savedEnvs));
+    }
+    
+    const current = localStorage.getItem('currentEnvironment');
+    if (current) {
+      setCurrentEnv(current);
+    }
   }, []);
 
-  const loadEnvironments = async () => {
-    setLoading(true);
-    try {
-      const data = await fetchEnvironments();
-      setEnvironments(data);
-      setError(null);
-    } catch (err) {
-      setError('Failed to load environments');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleCreateEnvironment = async () => {
+  const handleCreateEnvironment = () => {
     if (!newEnvName.trim()) return;
 
-    try {
-      const newEnv = await createEnvironment({
-        name: newEnvName,
-        active: false,
-        variables: []
-      });
-      setEnvironments(prevEnvs => [...prevEnvs, newEnv]);
-      setDialogOpen(false);
-      setNewEnvName('');
-      setError(null);
-    } catch (err) {
-      setError('Failed to create environment');
+    const newEnv = {
+      name: newEnvName.trim(),
+      variables: {
+        baseUrl: baseUrl.trim()
+      }
+    };
+
+    const updatedEnvs = [...environments, newEnv];
+    setEnvironments(updatedEnvs);
+    localStorage.setItem('environments', JSON.stringify(updatedEnvs));
+    setOpenDialog(false);
+    setNewEnvName('');
+    setBaseUrl('');
+  };
+
+  const handleDeleteEnv = (envName) => {
+    const updatedEnvs = environments.filter(env => env.name !== envName);
+    setEnvironments(updatedEnvs);
+    localStorage.setItem('environments', JSON.stringify(updatedEnvs));
+    if (currentEnv === envName) {
+      setCurrentEnv('');
+      localStorage.removeItem('currentEnvironment');
     }
   };
 
-  const handleUpdateEnvironment = async (envId, updates) => {
-    try {
-      const updatedEnv = await updateEnvironment(envId, updates);
-      setEnvironments(prevEnvs =>
-        prevEnvs.map(env =>
-          env.id === envId ? updatedEnv : env
-        )
-      );
-      setError(null);
-    } catch (err) {
-      setError('Failed to update environment');
-    }
-  };
-
-  const handleDeleteEnvironment = async (envId) => {
-    try {
-      await deleteEnvironment(envId);
-      setEnvironments(prevEnvs =>
-        prevEnvs.filter(env => env.id !== envId)
-      );
-      setError(null);
-    } catch (err) {
-      setError('Failed to delete environment');
-    }
-  };
-
-  const handleActivate = async (envId) => {
-    // Deactivate all environments and activate the selected one
-    try {
-      await Promise.all(
-        environments.map(env =>
-          updateEnvironment(env.id, { ...env, active: env.id === envId })
-        )
-      );
-      await loadEnvironments(); // Reload to get updated state
-      setError(null);
-    } catch (err) {
-      setError('Failed to update environment status');
-    }
-  };
-
-  const handleAddVariable = async (envId) => {
-    if (!newVariable.key || !newVariable.value) return;
-
-    const env = environments.find(e => e.id === envId);
-    if (!env) return;
-
-    try {
-      const updatedEnv = await updateEnvironment(envId, {
-        ...env,
-        variables: [...env.variables, newVariable]
-      });
-      setEnvironments(prevEnvs =>
-        prevEnvs.map(env =>
-          env.id === envId ? updatedEnv : env
-        )
-      );
-      setNewVariable({ key: '', value: '' });
-      setError(null);
-    } catch (err) {
-      setError('Failed to add variable');
-    }
-  };
-
-  const handleDeleteVariable = async (envId, variableKey) => {
-    const env = environments.find(e => e.id === envId);
-    if (!env) return;
-
-    try {
-      const updatedEnv = await updateEnvironment(envId, {
-        ...env,
-        variables: env.variables.filter(v => v.key !== variableKey)
-      });
-      setEnvironments(prevEnvs =>
-        prevEnvs.map(env =>
-          env.id === envId ? updatedEnv : env
-        )
-      );
-      setError(null);
-    } catch (err) {
-      setError('Failed to delete variable');
-    }
-  };
-
-  const handleCopyEnvironment = async (env) => {
-    try {
-      const newEnv = await createEnvironment({
-        ...env,
-        name: `${env.name} (Copy)`,
-        active: false
-      });
-      setEnvironments(prevEnvs => [...prevEnvs, newEnv]);
-      setError(null);
-    } catch (err) {
-      setError('Failed to copy environment');
-    }
+  const handleSetCurrent = (envName) => {
+    setCurrentEnv(envName);
+    localStorage.setItem('currentEnvironment', envName);
   };
 
   return (
-    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      {/* Header */}
-      <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+    <Box sx={{ 
+      p: 3,
+      height: '100%',
+      display: 'flex',
+      flexDirection: 'column'
+    }}>
+      {/* Environments List */}
+      <Box sx={{ mb: 4 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
           <Typography variant="h6">Environments</Typography>
           <Button
             variant="contained"
             startIcon={<AddIcon />}
-            size="small"
-            onClick={() => {
-              setSelectedEnv(null);
-              setNewEnvName('');
-              setDialogOpen(true);
-            }}
-            disabled={loading}
+            onClick={() => setOpenDialog(true)}
           >
-            New Environment
+            Create Environment
           </Button>
         </Box>
-      </Box>
+        
+        <Paper elevation={0} sx={{ bgcolor: 'background.default', p: 2, mb: 2 }}>
+          <Typography variant="subtitle2" gutterBottom>
+            Current Environment: {currentEnv || 'None'}
+          </Typography>
+        </Paper>
 
-      {/* Environments List */}
-      <List sx={{ flexGrow: 1, overflow: 'auto', py: 0 }}>
-        {loading ? (
-          <ListItem>
-            <ListItemText primary="Loading environments..." />
-          </ListItem>
-        ) : environments.length === 0 ? (
-          <ListItem>
-            <ListItemText primary="No environments found" />
-          </ListItem>
-        ) : (
-          environments.map((env) => (
-            <React.Fragment key={env.id}>
+        <List>
+          {environments.map((env) => (
+            <React.Fragment key={env.name}>
               <ListItem
                 sx={{
-                  '&:hover': {
-                    bgcolor: 'action.hover'
-                  }
+                  bgcolor: currentEnv === env.name ? 'action.selected' : 'background.paper',
+                  borderRadius: 1,
+                  mb: 1
                 }}
               >
                 <ListItemText
-                  primary={
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      {env.name}
-                      {env.active && (
-                        <Typography
-                          variant="caption"
-                          sx={{
-                            bgcolor: 'success.light',
-                            color: 'success.contrastText',
-                            px: 1,
-                            borderRadius: 1,
-                            fontSize: '0.75rem'
-                          }}
-                        >
-                          Active
-                        </Typography>
-                      )}
-                    </Box>
-                  }
-                  secondary={`${env.variables.length} variables`}
+                  primary={env.name}
+                  secondary={`Base URL: ${env.variables.baseUrl}`}
                 />
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Switch
-                    checked={env.active}
-                    onChange={() => handleActivate(env.id)}
-                    size="small"
-                    disabled={loading}
-                  />
+                <Tooltip title="Set as current">
                   <IconButton
-                    size="small"
-                    onClick={() => {
-                      setSelectedEnv(env);
-                      setNewEnvName(env.name);
-                      setDialogOpen(true);
-                    }}
-                    disabled={loading}
+                    edge="end"
+                    onClick={() => handleSetCurrent(env.name)}
+                    sx={{ mr: 1 }}
                   >
-                    <EditIcon fontSize="small" />
+                    {currentEnv === env.name ? <CheckIcon /> : null}
                   </IconButton>
+                </Tooltip>
+                <Tooltip title="Delete environment">
                   <IconButton
-                    size="small"
-                    onClick={() => handleCopyEnvironment(env)}
-                    disabled={loading}
+                    edge="end"
+                    onClick={() => handleDeleteEnv(env.name)}
                   >
-                    <CopyIcon fontSize="small" />
+                    <DeleteIcon />
                   </IconButton>
-                  <IconButton
-                    size="small"
-                    onClick={() => handleDeleteEnvironment(env.id)}
-                    disabled={loading}
-                  >
-                    <DeleteIcon fontSize="small" />
-                  </IconButton>
-                </Box>
+                </Tooltip>
               </ListItem>
-              <Box sx={{ px: 2, pb: 2 }}>
-                <TableContainer component={Paper} variant="outlined">
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>Variable</TableCell>
-                        <TableCell>Value</TableCell>
-                        <TableCell align="right" width={100}>Actions</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {env.variables.map((variable, index) => (
-                        <TableRow key={index}>
-                          <TableCell>{variable.key}</TableCell>
-                          <TableCell>{variable.value}</TableCell>
-                          <TableCell align="right">
-                            <IconButton
-                              size="small"
-                              onClick={() => handleDeleteVariable(env.id, variable.key)}
-                              disabled={loading}
-                            >
-                              <DeleteIcon fontSize="small" />
-                            </IconButton>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                      <TableRow>
-                        <TableCell>
-                          <TextField
-                            placeholder="Variable name"
-                            size="small"
-                            value={newVariable.key}
-                            onChange={(e) => setNewVariable({ ...newVariable, key: e.target.value })}
-                            variant="standard"
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <TextField
-                            placeholder="Value"
-                            size="small"
-                            value={newVariable.value}
-                            onChange={(e) => setNewVariable({ ...newVariable, value: e.target.value })}
-                            variant="standard"
-                          />
-                        </TableCell>
-                        <TableCell align="right">
-                          <Button
-                            size="small"
-                            onClick={() => handleAddVariable(env.id)}
-                            disabled={loading || !newVariable.key || !newVariable.value}
-                          >
-                            Add
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              </Box>
               <Divider />
             </React.Fragment>
-          ))
-        )}
-      </List>
+          ))}
+        </List>
+      </Box>
 
-      {/* Environment Dialog */}
-      <Dialog
-        open={dialogOpen}
-        onClose={() => setDialogOpen(false)}
-        maxWidth="sm"
-        fullWidth
+      {/* Coming Soon Section */}
+      <Paper
+        elevation={0}
+        sx={{
+          p: 4,
+          textAlign: 'center',
+          maxWidth: 600,
+          mx: 'auto',
+          bgcolor: 'background.default'
+        }}
       >
-        <DialogTitle>
-          {selectedEnv ? 'Edit Environment' : 'New Environment'}
-        </DialogTitle>
+        <ConstructionIcon sx={{ fontSize: 60, color: 'primary.main', mb: 2 }} />
+        <Typography variant="h5" gutterBottom>
+          Advanced Features Coming Soon
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+          We're working on enhanced environment management features:
+        </Typography>
+        <Box sx={{ textAlign: 'left', mb: 3 }}>
+          <Typography component="div" sx={{ mb: 2 }}>
+            ✓ Environment-specific variables and secrets
+          </Typography>
+          <Typography component="div" sx={{ mb: 2 }}>
+            ✓ Custom functions for request processing
+          </Typography>
+          <Typography component="div" sx={{ mb: 2 }}>
+            ✓ Import/Export configurations
+          </Typography>
+          <Typography component="div">
+            ✓ Team sharing capabilities
+          </Typography>
+        </Box>
+      </Paper>
+
+      {/* Create Environment Dialog */}
+      <Dialog open={openDialog} onClose={() => setOpenDialog(false)}>
+        <DialogTitle>Create New Environment</DialogTitle>
         <DialogContent>
           <TextField
             autoFocus
             margin="dense"
             label="Environment Name"
             fullWidth
-            variant="outlined"
             value={newEnvName}
             onChange={(e) => setNewEnvName(e.target.value)}
+            sx={{ mb: 2 }}
+          />
+          <TextField
+            margin="dense"
+            label="Base URL"
+            fullWidth
+            value={baseUrl}
+            onChange={(e) => setBaseUrl(e.target.value)}
+            placeholder="https://api.example.com"
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDialogOpen(false)}>Cancel</Button>
-          <Button
-            variant="contained"
-            onClick={() => {
-              if (selectedEnv) {
-                handleUpdateEnvironment(selectedEnv.id, { ...selectedEnv, name: newEnvName });
-              } else {
-                handleCreateEnvironment();
-              }
-              setDialogOpen(false);
-            }}
-            disabled={!newEnvName.trim()}
-          >
-            {selectedEnv ? 'Save Changes' : 'Create'}
+          <Button onClick={() => setOpenDialog(false)}>Cancel</Button>
+          <Button onClick={handleCreateEnvironment} variant="contained">
+            Create
           </Button>
         </DialogActions>
       </Dialog>
-
-      {/* Error Snackbar */}
-      <Snackbar
-        open={!!error}
-        autoHideDuration={6000}
-        onClose={() => setError(null)}
-      >
-        <Alert severity="error" onClose={() => setError(null)}>
-          {error}
-        </Alert>
-      </Snackbar>
     </Box>
   );
 };
